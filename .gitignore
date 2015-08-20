@@ -1,0 +1,16 @@
+/target
+.buildpath
+.project
+.settings
+target/
+.idea/
+.gradle/
+local.properties
+*.class
+*.iml
+*.iws
+*.ipr
+.DS_Store
+.classpath
+output/
+*.log
