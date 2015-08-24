@@ -1,8 +1,5 @@
 package org.example.lambda;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,9 +23,8 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 
-public class S3EventProcessorCreateThumbnail implements RequestHandler<S3Event, String> {
-	private static final float MAX_WIDTH = 250;
-	private static final float MAX_HEIGHT = 250;
+public class S3EventProcessorCopyImage implements RequestHandler<S3Event, String> {
+	
 	private final String JPG_TYPE = (String) "jpg";
 	private final String JPG_MIME = (String) "image/jpeg";
 	private final String PNG_TYPE = (String) "png";
@@ -50,8 +46,7 @@ public class S3EventProcessorCreateThumbnail implements RequestHandler<S3Event, 
 			srcKey = URLDecoder.decode(srcKey, "UTF-8");
 
 			String dstBucket = srcBucket + "resized";
-			//String dstKey = srcKey.substring(srcKey.lastIndexOf("/") > 0 ? srcKey.lastIndexOf("/")  : 0, srcKey.lastIndexOf(".") > 0 ? srcKey.lastIndexOf(".") : srcKey.length()-1);
-			String dstKey = "resized" + srcKey;
+			String dstKey = Target.deduceTarget(srcKey);
 			
 			// Sanity check: validate that source and destination are different
 			// buckets.
@@ -80,37 +75,8 @@ public class S3EventProcessorCreateThumbnail implements RequestHandler<S3Event, 
 
 			// Read the source image
 			BufferedImage srcImage = ImageIO.read(objectData);
-			int srcHeight = srcImage.getHeight();
-			int srcWidth = srcImage.getWidth();
-			
-			// Infer the scaling factor to avoid stretching the image
-			// unnaturally
-			float scalingFactor = Math.min(MAX_WIDTH / srcWidth, MAX_HEIGHT	/ srcHeight);
-			int width = (int) (scalingFactor * srcWidth);
-			int height = (int) (scalingFactor * srcHeight);
-			
-			BufferedImage resizedImage;
-			if(srcWidth != MAX_WIDTH && srcHeight != MAX_HEIGHT){
-				resizedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-				Graphics2D g = resizedImage.createGraphics();
-				// Fill with white before applying semi-transparent (alpha) images
-				g.setPaint(Color.white);
-				g.fillRect(0, 0, width, height);
-				// Simple bilinear resize
-				// If you want higher quality algorithms, check this link:
-				// https://today.java.net/pub/a/today/2007/04/03/perils-of-image-getscaledinstance.html
-				g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-				g.drawImage(srcImage, 0, 0, width, height, null);
-				g.dispose();
-				
-				// Re-encode image to target format
-				
-			} else {
-				resizedImage = srcImage;
-			}
-			
 			ByteArrayOutputStream os = new ByteArrayOutputStream();
-			ImageIO.write(resizedImage, imageType, os);
+			ImageIO.write(srcImage, imageType, os);
 			InputStream is = new ByteArrayInputStream(os.toByteArray());
 			
 			// Set Content-Length and Content-Type
@@ -128,22 +94,11 @@ public class S3EventProcessorCreateThumbnail implements RequestHandler<S3Event, 
 			if (GIF_TYPE.equals(imageType)) {
 				meta.setContentType(GIF_MIME);
 			}
-			
-			//meta.setHeader("x-amz-copy-source",  srcBucket + "/" + srcKey);
-			
-			/** Example Custom ACL usage
-			AccessControlList acl = new AccessControlList();
-			acl.grantPermission(new CanonicalGrantee("d25639fbe9c19cd30a4c0f43fbf00e2d3f96400a9aa8dabfbbebe1906Example"), Permission.ReadAcp);
-			acl.grantPermission(GroupGrantee.AllUsers, Permission.Read);
-			acl.grantPermission(new EmailAddressGrantee("user@email.com"), Permission.WriteAcp);
-			s3Client.putObject(new PutObjectRequest(dstBucket, dstKey, is, meta).withAccessControlList(acl));
-			*/
 
 			// Uploading to S3 destination bucket
 			System.out.println("Writing to: " + dstBucket + "/" + dstKey);
 			s3Client.putObject(new PutObjectRequest(dstBucket, dstKey, is, meta).withCannedAcl(CannedAccessControlList.PublicRead));
-			//s3Client.putObject(new PutObjectRequest(dstBucket, dstKey, is, meta));
-			System.out.println("Successfully resized " + srcBucket + "/" + srcKey + " and uploaded to " + dstBucket + "/" + dstKey);
+			System.out.println("Successfully written to " + dstBucket + "/" + dstKey);
 			return "Ok";
 		} catch (IOException e) {
 			throw new RuntimeException(e);

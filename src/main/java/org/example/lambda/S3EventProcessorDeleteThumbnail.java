@@ -26,7 +26,7 @@ public class S3EventProcessorDeleteThumbnail implements RequestHandler<S3Event, 
 			AmazonS3 s3Client = new AmazonS3Client();
 
 			String dstBucket = srcBucket + "resized";
-			String dstKey = "resized" + srcKey;
+			String dstKey = Target.deduceTarget(srcKey);
 
 			// Delete from S3 destination bucket
 			System.out.println("Deleting from: " + dstBucket + "/" + dstKey);
